@@ -1,31 +1,21 @@
-from sqlalchemy import Column, Integer, create_engine
-from sqlalchemy.ext.declarative import declarative_base
+from typing import TypeVar
+from database.Base import Base
+from database.MySqlConfig import MySqlConfig
+from sqlalchemy import Engine, ScalarResult, create_engine, select
+from sqlalchemy.orm import Session
 
 
-def p():
-    print("Database")
+TEntity = TypeVar("TEntity", Base)
 
 
-connection_string = "mysql+<drivername>://<username>:<password>@<server>:<port>/dbname"
-engine = create_engine(connection_string, echo=True)
+class DbContext:
+    _engine: Engine
+    _session: Session
 
-Base = declarative_base()
+    def __init__(self, config: MySqlConfig) -> None:
+        self._engine = create_engine(config.connection_string(), echo=True)
+        self._session = Session(self._engine)
 
-
-class Kline(Base):
-    __tablename__ = "Kline"
-    id = Column(Integer, primary_key=True)
-    open_time = DateTime
-    close_tim = DateTime
-    symbol = string
-    interval = string
-    open_price = double
-    close_price = double
-    high_price = double
-    low_price = double
-    base_asset_volume = double
-    number_of_trades = long
-    is_kline_closed = bool
-    quote_asset_volume = double
-    taker_buy_base_asset_volume = double
-    taker_buy_quote_asset_volume = double
+    def get_all(self, entity: TEntity) -> ScalarResult[TEntity]:
+        result = select(entity)
+        return self._session.scalars(result)
