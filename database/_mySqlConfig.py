@@ -3,7 +3,7 @@ class MySqlConfig:
     password: str
     raw_connection_string: str
 
-    def __init__(self, user, password, raw_connection_string) -> None:
+    def __init__(self, user: str, password: str, raw_connection_string: str) -> None:
         self.user = user
         self.password = password
         self.raw_connection_string = raw_connection_string

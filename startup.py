@@ -1,6 +1,21 @@
+import os
 import aimodels
-import database
+from database import DbContext, MySqlConfig
+from database.repositories import KlineRepository
+
 
 if __name__ == "__main__":
-    database.p()
-    aimodels.p()
+    dbc = DbContext(
+        MySqlConfig(
+            os.environ.get("MySql:User"),
+            os.environ.get("MySql:Password"),
+            "mysql+mysqlconnector://<User>:<Password>@aws.connect.psdb.cloud:3306/crypto-bot",
+        )
+    )
+
+    kr = KlineRepository(dbc)
+    batch = kr.batch(10)
+
+    print(batch.next().all())
+    print("\n----------------------------\n")
+    print(batch.next().all())
