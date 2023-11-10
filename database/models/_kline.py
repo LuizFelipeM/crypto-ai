@@ -27,6 +27,3 @@ class Kline(Base):
     taker_buy_quote_asset_volume: Mapped[float] = mapped_column(
         name="TakerBuyQuoteAssetVolume"
     )
-
-    def __repr__(self) -> str:
-        return f"Kline(id={self.id!r}, open_time={self.open_time!r}, close_time={self.close_time!r}, symbol={self.symbol!r}, interval={self.interval!r}, open_price={self.open_price!r}, close_price={self.close_price!r}, high_price={self.high_price!r}, low_price={self.low_price!r}, base_asset_volume={self.base_asset_volume!r}, number_of_trades={self.number_of_trades!r}, is_kline_closed={self.is_kline_closed!r}, quote_asset_volume={self.quote_asset_volume!r}, taker_buy_base_asset_volume={self.taker_buy_base_asset_volume!r}, taker_buy_quote_asset_volume={self.taker_buy_quote_asset_volume!r})"

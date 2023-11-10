@@ -7,9 +7,9 @@ MySqlConfig
 
 
 class DbContext:
-    _engine: Engine
+    engine: Engine
     session: Session
 
     def __init__(self, config: MySqlConfig) -> None:
-        self._engine = create_engine(config.connection_string(), echo=True)
-        self.session = Session(self._engine)
+        self.engine = create_engine(config.connection_string(), echo=True)
+        self.session = Session(self.engine)
