@@ -27,3 +27,4 @@ class Kline(Base):
     taker_buy_quote_asset_volume: Mapped[float] = mapped_column(
         name="TakerBuyQuoteAssetVolume"
     )
+    created_at: Mapped[datetime] = mapped_column(name="CreatedAt")
