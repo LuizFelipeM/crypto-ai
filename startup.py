@@ -5,7 +5,7 @@ import pandas as pd
 import tensorflow as tf
 from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split
-from crypto_models import (
+from ai_models import (
     create_LSTM_model,
     create_RNN_model,
     early_stopping_train_model,
@@ -104,7 +104,7 @@ y_train_array = np.array(y_train)
 
 folder_path = f"./models/{datetime.now().strftime('%Y-%m-%d_%H.%M.%S')}"
 
-X_test = np.concatenate((X_train[len(X_train) - padding :], X_test), axis=0)
+X_test = np.concatenate((X_train[len(X_train) - padding :], X_test), axis=0)  # type: ignore
 y_test = np.concatenate((y_train[len(y_train) - padding :], y_test), axis=0).reshape(
     (-1, 1)
 )

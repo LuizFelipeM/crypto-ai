@@ -67,6 +67,6 @@ def plot_candlesticks(df: pd.DataFrame, datetime_format="%Y-%m-%d %H:%M:%S"):
         close_time = pd.to_datetime(
             df.close_time, unit="ms", origin="unix"
         ).dt.strftime(datetime_format)
-        plt.xticks(ticks=range(len(close_time)), labels=close_time, rotation=30)
+        plt.xticks(ticks=range(len(close_time)), labels=close_time, rotation=30)  # type: ignore
         plt.grid()
         plt.show()
