@@ -162,4 +162,7 @@ cython_debug/
 # Removed datasets
 datasets/
 
+# Removed saved models
+models/
+
 *.pyc
