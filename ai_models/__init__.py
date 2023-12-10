@@ -54,3 +54,18 @@ def create_RNN_model(train_shape: tuple[int, ...]) -> Sequential:
         Dropout(0.2),
         Dense(units=1, activation="sigmoid"),
     )
+
+
+def create_LSTM_D_LSTM_model(train_shape: tuple[int, ...]) -> Sequential:
+    return generate_model(
+        LSTM(
+            units=100,
+            return_sequences=True,
+            input_shape=(train_shape[1], train_shape[2]),
+        ),
+        Dropout(0.2),
+        Dense(units=50),
+        Dropout(0.2),
+        LSTM(units=100),
+        Dense(units=1, activation="sigmoid"),
+    )

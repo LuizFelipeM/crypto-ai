@@ -14,6 +14,7 @@ def split_X_y(
     X: list[pd.DataFrame] = []
     y: list[pd.DataFrame] = []
 
+    # Convert to List Comprehension in order to use C++ performance improvements
     for i in range(padding, dataset_shape[0]):
         X.append(training_set.iloc[i - padding : i])
         y.append(training_set.iloc[[i]])

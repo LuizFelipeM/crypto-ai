@@ -1,20 +1,17 @@
 from datetime import datetime
 import numpy as np
 import tensorflow as tf
-from ai_models import (
-    create_LSTM_model,
-    create_RNN_model,
-    generate_model,
-    save_model,
-)
+from ai_models import generate_model, save_model
 from datasets import get_close_scaler, get_train_test_dataset
 from graphs import plot_prediction
 from keras.models import Model
-from keras.layers import LSTM, SimpleRNN, Dense, Dropout
+from keras.layers import LSTM, Dense, Dropout
 from keras.callbacks import EarlyStopping
 
 
-folder_path = f"./models/{datetime.now().strftime('%Y-%m-%d_%H.%M.%S')}"
+folder_path = (
+    f"./models/BTCUSDT-1m-2023-10/{datetime.now().strftime('%Y-%m-%d_%H.%M.%S')}"
+)
 
 X_train, X_test, y_train, y_test, labels = get_train_test_dataset()
 
@@ -57,7 +54,7 @@ def train_and_save_model(input: Input) -> Output:
     input.model.fit(
         input.X_train,
         input.y_train,
-        epochs=500,
+        epochs=5000,
         batch_size=X_train.shape[0],
         callbacks=[es],
     )
@@ -68,11 +65,9 @@ def train_and_save_model(input: Input) -> Output:
 strategy = tf.distribute.MirroredStrategy()
 with strategy.scope():
     inputs_to_train = [
-        # Input(folder_path, "LSTM", create_LSTM_model(X_train.shape), X_train, y_train),
-        # Input(folder_path, "RNN", create_RNN_model(X_train.shape), X_train, y_train),
         Input(
             folder_path,
-            "LSTM+RNN",
+            "LSTM_D_LSTM",
             generate_model(
                 LSTM(
                     units=100,
@@ -80,9 +75,9 @@ with strategy.scope():
                     input_shape=(X_train.shape[1], X_train.shape[2]),
                 ),
                 Dropout(0.2),
-                SimpleRNN(units=50, return_sequences=True),
-                SimpleRNN(units=25),
+                Dense(units=50),
                 Dropout(0.2),
+                LSTM(units=100),
                 Dense(units=1, activation="sigmoid"),
             ),
             X_train,
@@ -93,6 +88,7 @@ with strategy.scope():
     for input in inputs_to_train:
         input.model.compile(optimizer="adam", loss="mean_squared_error")
 
+    subset_factor = 500
     for input in inputs_to_train:
         output = train_and_save_model(input)
         y_predicted = output.model.predict(X_test)
@@ -100,7 +96,7 @@ with strategy.scope():
             output.folder_path,
             output.model_name,
             get_close_scaler(),
-            labels.tolist(),
-            y_test,
-            y_predicted,
+            labels.tolist()[::subset_factor],
+            y_test[::subset_factor],
+            y_predicted[::subset_factor],
         )

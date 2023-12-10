@@ -1,8 +1,8 @@
 import os
-from typing import Sequence
-from dotenv import load_dotenv
 import pandas as pd
 import numpy as np
+from dotenv import load_dotenv
+from datetime import datetime
 from sklearn.model_selection import train_test_split
 from database import DbContext, MySqlConfig
 from database.repositories import KlineRepository
@@ -42,14 +42,27 @@ selected_fields = [
 # df = create_dataframe(kline_batch.next())
 # df = create_dataframe(kr.get_all())
 
+
+def date_parser(epoch_date: int) -> str:
+    time_in_secs = epoch_date / 1000
+    return datetime.fromtimestamp(float(time_in_secs)).strftime(
+        # "%Y-%m-%d"
+        "%Y-%m-%d %H:%M"
+    )
+
+
+padding = 1440
 df = pd.read_csv(
-    "./datasets/BTCUSDT - 1mo - 2021-01 - 2023-10/BTCUSDT-1mo-2021-01-2023-10.csv"
+    # "./datasets/BTCUSDT - 1mo - 2021-01 - 2023-10/BTCUSDT-1mo-2021-01-2023-10.csv"
+    # "./datasets/BTCUSDT - 1d - 2021-01 - 2023-10/BTCUSDT-1d-2021-01-2023-10.csv"
+    "./datasets/BTCUSDT - 1m - 2021-01 - 2023-10/BTCUSDT-1m-2023-10.csv",
+    index_col=6,
 )
 
 # close_prices = df["close_price"].values.reshape(-1, 1)
 selected_df = df[
     [
-        "close_time",
+        # "close_time",
         "close",
         "open",
         "high",
@@ -61,23 +74,27 @@ selected_df = df[
         # "taker_buy_quote_volume",
     ]
 ]
-selected_df.close_time = pd.to_datetime(
-    selected_df.close_time, unit="ms", origin="unix"
-).dt.strftime("%Y-%m-%d")
-selected_df = selected_df.set_index("close_time")
+# selected_df.loc[:, "close_time"] = pd.to_datetime(
+#     selected_df.close_time, unit="ms", origin="unix"
+# ).dt.strftime(
+#     "%Y-%m-%d"
+#     # "%Y-%m-%d %H:%M"
+# )
+# selected_df = selected_df.set_index("close_time")
+
+selected_df.loc[:, "close"] = close_sc.fit_transform(
+    selected_df.loc[:, "close":"close"]
+)
 
 columns_to_transform = selected_df.columns[selected_df.columns != "close"]
 selected_df[columns_to_transform] = sc.fit_transform(selected_df[columns_to_transform])
 
-selected_df.close = close_sc.fit_transform(selected_df.loc[:, "close":"close"])
-
-padding = 12
 X, y = split_X_y(selected_df.shape, selected_df, padding)
 
 X_values = np.array(list(map(lambda x: x.iloc[:].values, X)))
 y_values = y.loc[:, "close"].values
 X_train, X_test, y_train, y_test = train_test_split(
-    X_values, y_values, test_size=0.25, random_state=0
+    X_values, y_values, test_size=0.3, random_state=0
 )
 
 X_train = np.array(X_train)
