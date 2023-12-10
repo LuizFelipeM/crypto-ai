@@ -1,3 +1,4 @@
+from typing import Sequence
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -5,7 +6,12 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 def plot_prediction(
-    folder_path: str, file_name: str, scaler: MinMaxScaler, y_true, y_pred
+    folder_path: str,
+    file_name: str,
+    scaler: MinMaxScaler,
+    x_labels: Sequence[str],
+    y_true,
+    y_pred,
 ) -> None:
     fig = plt.figure()
     res_true = scaler.inverse_transform(y_true)
@@ -14,6 +20,7 @@ def plot_prediction(
     plt.plot(np.reshape(res_pred, (-1,)), color="blue", label="Predicted close price")
     plt.title("BTCUSDT close prices")
     plt.xlabel("Time")
+    plt.xticks(ticks=range(len(x_labels)), labels=x_labels, rotation=30)
     plt.ylabel("Price")
     plt.legend()
     plt.savefig(f"{folder_path}/{file_name}_graph.png")
