@@ -56,13 +56,13 @@ df = pd.read_csv(
     # "./datasets/BTCUSDT - 1mo - 2021-01 - 2023-10/BTCUSDT-1mo-2021-01-2023-10.csv"
     # "./datasets/BTCUSDT - 1d - 2021-01 - 2023-10/BTCUSDT-1d-2021-01-2023-10.csv"
     "./datasets/BTCUSDT - 1m - 2021-01 - 2023-10/BTCUSDT-1m-2023-10.csv",
-    index_col=6,
+    # index_col=6,
 )
 
 # close_prices = df["close_price"].values.reshape(-1, 1)
 selected_df = df[
     [
-        # "close_time",
+        "close_time",
         "close",
         "open",
         "high",
@@ -80,7 +80,6 @@ selected_df = df[
 #     "%Y-%m-%d"
 #     # "%Y-%m-%d %H:%M"
 # )
-# selected_df = selected_df.set_index("close_time")
 
 selected_df.loc[:, "close"] = close_sc.fit_transform(
     selected_df.loc[:, "close":"close"]
@@ -90,6 +89,9 @@ columns_to_transform = selected_df.columns[selected_df.columns != "close"]
 selected_df[columns_to_transform] = sc.fit_transform(selected_df[columns_to_transform])
 
 X, y = split_X_y(selected_df.shape, selected_df, padding)
+X = [x.set_index("close_time") for x in X]
+y = y.set_index("close_time")
+
 
 X_values = np.array(list(map(lambda x: x.iloc[:].values, X)))
 y_values = y.loc[:, "close"].values
