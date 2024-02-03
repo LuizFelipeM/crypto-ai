@@ -1,5 +1,13 @@
+from typing_extensions import Unpack
 import pandas as pd
 from sqlalchemy import ScalarResult
+from utils._pnlConfig import PnLConfig
+
+from utils._contract import Contract
+from utils._position import Position
+
+
+__all__ = ["Position", "Contract"]
 
 
 def create_dataframe(values: ScalarResult, selected_fields: list[str]) -> pd.DataFrame:
@@ -23,3 +31,48 @@ def split_X_y(
     #     y.append(training_set.iloc[[i]])
 
     return (X, pd.concat(y))
+
+
+def diminishing_return(value: float, factor: float) -> float:
+    return factor / (factor + value)
+
+
+def pnl(
+    position: Position,
+    contract: Contract,
+    open_price: float,
+    close_price: float,
+    **kwargs: Unpack[PnLConfig],
+) -> float:
+    """Position and Contract types affect the PnL calculation as following:
+
+    Linear:
+        Long: PnL = position_qty * (close_price - open_price)
+        Short: PnL = position_qty * (open_price - close_price)
+
+    Inverse:
+        Long: PnL = contract_qty * contract_value * (1/open_price - 1/close_price)
+        Short: PnL = contract_qty * contract_value * (1/close_price - 1/open_price)
+    """
+    (price1, price2) = (
+        (open_price, close_price)
+        if position == Position.SHORT
+        else (close_price, open_price)
+    )
+
+    if contract == Contract.LINEAR:
+        if kwargs.get("position_qty") == None:
+            raise ValueError(
+                "position_qty is required for Linear contracts PnL calculation"
+            )
+        return kwargs.get("position_qty", 0.0) * (price1 - price2)
+
+    if kwargs.get("position_qty") == None or kwargs.get("contract_size") == None:
+        raise ValueError(
+            "position_qty and contract_size are required for Inverse contracts PnL calculation"
+        )
+    return (
+        kwargs.get("contract_qty", 0.0)
+        * kwargs.get("contract_size", 0.0)
+        * ((1 / price2) - (1 / price1))
+    )

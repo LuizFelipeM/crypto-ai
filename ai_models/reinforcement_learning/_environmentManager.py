@@ -1,5 +1,5 @@
 import torch
-from ai_models.reinforcement_learning.Environment.Environment import Environment
+from environment import Environment
 
 
 class EnvironmentManager:

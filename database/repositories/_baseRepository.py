@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from typing import Callable, Generic, Type, TypeVar
 from sqlalchemy import ColumnExpressionArgument, ScalarResult, select
-from database import DbContext
+from database._dbContext import DbContext
 from database.models._base import Base
 
 TEntity = TypeVar("TEntity", bound=Base)

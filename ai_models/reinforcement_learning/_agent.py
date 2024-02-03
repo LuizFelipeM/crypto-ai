@@ -1,7 +1,7 @@
 import random
 import torch
 import torch.nn as nn
-from ai_models.reinforcement_learning.Strategy import Strategy
+from ai_models.reinforcement_learning._strategy import Strategy
 
 
 class Agent:

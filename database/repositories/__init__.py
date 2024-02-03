@@ -1,3 +1,3 @@
 from database.repositories._klineRepository import KlineRepository
 
-KlineRepository
+__all__ = ["KlineRepository"]

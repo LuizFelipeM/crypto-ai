@@ -1,4 +1,4 @@
 from database.models._kline import Kline
 
 
-Kline
+__all__ = ["Kline"]

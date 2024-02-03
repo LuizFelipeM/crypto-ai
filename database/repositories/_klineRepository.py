@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from database import DbContext
+from database._dbContext import DbContext
 from database.models import Kline
 from database.repositories._baseRepository import BaseRepository
 

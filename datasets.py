@@ -4,7 +4,7 @@ import numpy as np
 from dotenv import load_dotenv
 from datetime import datetime
 from sklearn.model_selection import train_test_split
-from database import DbContext, MySqlConfig
+from database import MySqlConfig, DbContext
 from database.repositories import KlineRepository
 from sklearn.preprocessing import MinMaxScaler
 from utils import split_X_y
@@ -67,7 +67,7 @@ selected_df = df[
         "open",
         "high",
         "low",
-        "volume"
+        "volume",
         # "quote_volume",
         # "count",
         # "taker_buy_volume",
