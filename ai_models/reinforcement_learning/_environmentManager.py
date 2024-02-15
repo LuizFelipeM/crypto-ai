@@ -22,8 +22,11 @@ class EnvironmentManager:
         return self.env.action_space.n
 
     def take_action(self, action: torch.Tensor) -> torch.Tensor:
-        _, reward, self.done, _, _ = self.env.step(action.item())  # type: ignore
+        _, reward, self.done, _ = self.env.step(action.item())  # type: ignore
         return torch.tensor([reward], device=self.device)
 
     def get_state(self) -> torch.Tensor:
-        raise NotImplementedError
+        return torch.from_numpy(self.env.current_observation_space.to_numpy())
+
+    def get_shape(self) -> tuple[int, int]:
+        return self.env.observation_space.shape

@@ -1,8 +1,22 @@
-from typing import Sequence
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from typing import Sequence
 from sklearn.preprocessing import MinMaxScaler
+from utils import get_moving_average
+
+
+def plot_reinforcement_learning(values: list, moving_avg_period: int) -> None:
+    plt.figure(2)
+    plt.clf()
+    plt.title("Training...")
+    plt.xlabel("Episode")
+    plt.ylabel("Duration")
+    plt.plot(values)
+
+    moving_avg = get_moving_average(moving_avg_period, values)
+    plt.plot(moving_avg)
+    plt.pause(0.001)
 
 
 def plot_prediction(
@@ -20,7 +34,7 @@ def plot_prediction(
     plt.plot(np.reshape(res_pred, (-1,)), color="blue", label="Predicted close price")
     plt.title("BTCUSDT close prices")
     plt.xlabel("Time")
-    plt.xticks(ticks=range(len(x_labels)), labels=x_labels, rotation=30)
+    plt.xticks(ticks=range(len(x_labels)), labels=x_labels, rotation=30)  # type: ignore
     plt.ylabel("Price")
     plt.legend()
     plt.savefig(f"{folder_path}/{file_name}_graph.png")

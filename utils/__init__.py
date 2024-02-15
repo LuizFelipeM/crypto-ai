@@ -1,8 +1,9 @@
-from typing_extensions import Unpack
+import numpy as np
 import pandas as pd
+import torch
+from typing_extensions import Unpack
 from sqlalchemy import ScalarResult
 from utils._pnlConfig import PnLConfig
-
 from utils._contract import Contract
 from utils._position import Position
 
@@ -76,3 +77,18 @@ def pnl(
         * kwargs.get("contract_size", 0.0)
         * ((1 / price2) - (1 / price1))
     )
+
+
+def get_moving_average(period, values) -> np.ndarray:
+    values = torch.tensor(values, dtype=torch.float)
+    if len(values) >= period:
+        moving_avg = (
+            values.unfold(dimension=0, size=period, step=1)
+            .mean(dim=1)
+            .flatten(start_dim=0)
+        )
+        moving_avg = torch.cat((torch.zeros(period - 1), moving_avg))
+        return moving_avg.numpy()
+
+    moving_avg = torch.zeros(len(values))
+    return moving_avg.numpy()
