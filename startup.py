@@ -7,23 +7,31 @@ import torch.nn.functional as F
 import gymnasium as gym
 from gymnasium.wrappers.record_video import RecordVideo
 from gymnasium.wrappers.record_episode_statistics import RecordEpisodeStatistics
-from gymnasium.wrappers.normalize import NormalizeObservation, NormalizeReward
+from gymnasium.wrappers.normalize import (
+    NormalizeObservation,
+    NormalizeReward,
+    RunningMeanStd,
+)
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import IterableDataset
 from torch.optim import AdamW
 from pytorch_lightning import LightningModule, Trainer
+from collections import namedtuple
 from base64 import b64encode
 
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
+BatchItem = namedtuple("BatchItem", ("obs_b", "action_b", "return_b"))
+
+# device = "cpu"
+# accelarator = "cpu"
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+accelarator = "gpu" if torch.cuda.is_available() else "cpu"
 num_gpus = torch.cuda.device_count()
 
-# env = gym.make("crypto-envs/BTCUSDT-v0")
 
-
-def create_env(env_name: str, num_envs: int) -> gym.vector.VectorEnv:
-    env = gym.make_vec(env_name, num_envs=num_envs)
-    env = RecordEpisodeStatistics(env)  # type: ignore
+def create_env(env_name: str, num_envs: int) -> NormalizeReward:
+    env = gym.vector.make(env_name, num_envs=num_envs)
+    env = RecordEpisodeStatistics(env)
     env = NormalizeObservation(env)
     env = NormalizeReward(env)
     return env
@@ -61,7 +69,7 @@ def plot_policy(policy):
     plt.yticks(ticks=[100, 50, 0], labels=["-0.418", "0", "0.418"])
 
 
-def test_env(env_name: str, policy, obs_rms):
+def test_env(env_name: str, policy: nn.Module, obs_rms: RunningMeanStd):
     env = gym.make(env_name)
     env = RecordVideo(env, "videos", episode_trigger=lambda e: True)
     env = NormalizeObservation(env)
@@ -83,7 +91,13 @@ def test_env(env_name: str, policy, obs_rms):
 
 
 class RLDataset(IterableDataset):
-    def __init__(self, env, policy, steps_per_epoch, gamma):
+    def __init__(
+        self,
+        env: NormalizeReward,
+        policy: nn.Module,
+        steps_per_epoch: int,
+        gamma: float,
+    ):
         self.env = env
         self.policy = policy
         self.steps_per_epoch = steps_per_epoch
@@ -95,9 +109,9 @@ class RLDataset(IterableDataset):
         transitions = []
 
         for step in range(self.steps_per_epoch):
-            action = self.policy(self.obs)
+            action = self.policy(self.obs).to(device)
             action = action.multinomial(1).cpu().numpy()
-            next_obs, reward, done, info = self.env.step(action.flatten())
+            next_obs, reward, done, _, _ = self.env.step(action.flatten())
             transitions.append((self.obs, action, reward, done))
             self.obs = next_obs
 
@@ -121,28 +135,29 @@ class RLDataset(IterableDataset):
         random.shuffle(idx)
 
         for i in idx:
-            yield obs_b[i], action_b[i], return_b[i]
+            yield BatchItem(obs_b[i], action_b[i], return_b[i])
 
 
 class GradientPolicy(nn.Module):
-    def __init__(self, in_features, n_actions, hidden_size=128):
+    def __init__(self, in_features: int, n_actions: int, hidden_size=128):
         super().__init__()
-        self.fc1 = nn.Linear(in_features, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, n_actions)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.clone().detach().float().to(device)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.softmax(self.fc3(x), dim=-1)
-        return x
+        self.fc1 = nn.Linear(in_features, hidden_size).to(device)
+        self.fc2 = nn.Linear(hidden_size, hidden_size).to(device)
+        self.fc3 = nn.Linear(hidden_size, n_actions).to(device)
+
+    def forward(self, x: tuple[np.ndarray, dict]) -> torch.Tensor:
+        t = torch.tensor(x[0]).float().to(device)
+        t = F.relu(self.fc1(t)).to(device)
+        t = F.relu(self.fc2(t)).to(device)
+        t = F.softmax(self.fc3(t), dim=-1).to(device)
+        return t
 
 
 class Reinforce(LightningModule):
     def __init__(
         self,
-        env_name,
+        env_name: str,
         num_envs=8,
         samples_per_epoch=1000,
         batch_size=1024,
@@ -151,29 +166,35 @@ class Reinforce(LightningModule):
         gamma=0.99,
         entropy_coef=0.001,
         optim=AdamW,
+        num_workers=0,
     ):
 
         super().__init__()
 
         self.env = create_env(env_name, num_envs=num_envs)
 
-        obs_size: int = len(self.env.unwrapped.single_observation_space.keys())  # type: ignore
+        obs_size: int = (
+            self.env.unwrapped.single_observation_space.shape[0]
+            if hasattr(self.env.unwrapped.single_observation_space, "shape")
+            else len(self.env.unwrapped.single_observation_space)
+        )
         n_actions: int = self.env.unwrapped.single_action_space.n  # type: ignore
 
         self.policy = GradientPolicy(obs_size, n_actions, hidden_size)
         self.dataset = RLDataset(self.env, self.policy, samples_per_epoch, gamma)
+        self.num_workers = num_workers
 
         self.save_hyperparameters()
 
     # Configure optimizers.
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> torch.optim.Optimizer:
         return self.hparams.optim(self.policy.parameters(), lr=self.hparams.policy_lr)  # type: ignore
 
-    def train_dataloader(self):
-        return DataLoader(dataset=self.dataset, batch_size=self.hparams.batch_size)  # type: ignore
+    def train_dataloader(self) -> DataLoader:
+        return DataLoader(dataset=self.dataset, batch_size=self.hparams.batch_size, num_workers=self.num_workers, pin_memory=True)  # type: ignore
 
     # Training step.
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch: BatchItem, batch_idx: int) -> float:
         obs, actions, returns = batch
 
         probs = self.policy(obs)
@@ -190,17 +211,24 @@ class Reinforce(LightningModule):
 
         return loss
 
-    def training_epoch_end(self, training_step_outputs):
-        self.log("episode/Return", self.env.return_queue[-1])  # type: ignore
+    def on_train_epoch_end(self, training_step_outputs):
+        self.log("episode/Return", self.env.return_queue[-1])
 
 
-algo = Reinforce("crypto-envs/BTCUSDT-v0")
+# algo2 = Reinforce("CartPole-v1", num_workers=2)
+# trainer2 = Trainer(
+#     accelerator=accelarator, devices=num_gpus, max_epochs=100, log_every_n_steps=1
+# )
+# trainer2.fit(algo2)
 
-trainer = Trainer(gpus=num_gpus, max_epochs=100, log_every_n_steps=1)  # type: ignore
+algo = Reinforce("crypto-envs/BTCUSDT-v0").to(device)
+trainer = Trainer(
+    accelerator=accelarator, devices=num_gpus, max_epochs=100, log_every_n_steps=1
+)
 trainer.fit(algo)
 
 import warnings
 
 warnings.filterwarnings("ignore")
 
-test_env("crypto-envs/BTCUSDT-v0", algo.policy.to(device), algo.env.obs_rms)  # type: ignore
+test_env("crypto-envs/BTCUSDT-v0", algo.policy.to(device), algo.env.obs_rms)

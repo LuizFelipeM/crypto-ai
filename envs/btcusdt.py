@@ -1,10 +1,11 @@
 import math
 import gymnasium as gym
 import pandas as pd
+import numpy as np
 import pygame
 from functools import reduce
 from typing import Any, SupportsFloat
-from gymnasium.spaces import Discrete, Box, Dict
+from gymnasium.spaces import Discrete, Box, Tuple
 from gymnasium.core import RenderFrame
 from utils import diminishing_return, pnl, Position, Contract
 
@@ -31,22 +32,41 @@ class BTCUSDTEnv(gym.Env):
         )
 
         self.action_space = Discrete(3)
-        self.observation_space = Dict(
-            {
-                "open_time": Discrete(1_000_000_000_000),
-                "open": Box(low=0, high=math.inf, shape=()),
-                "high": Box(low=0, high=math.inf, shape=()),
-                "low": Box(low=0, high=math.inf, shape=()),
-                "close": Box(low=0, high=math.inf, shape=()),
-                "volume": Box(low=0, high=math.inf, shape=()),
-                "close_time": Discrete(1_000_000_000_000),
-                "quote_volume": Box(low=0, high=math.inf, shape=()),
-                "count": Discrete(1_000_000_000_000),
-                "taker_buy_volume": Box(low=0, high=math.inf, shape=()),
-                "taker_buy_quote_volume": Box(low=0, high=math.inf, shape=()),
-                "ignore": Discrete(1),
-            }
-        )
+        # self.observation_space = Dict(
+        #     {
+        #         "open_time": Discrete(1_000_000_000_000),
+        #         "open": Box(low=0, high=math.inf, shape=()),
+        #         "high": Box(low=0, high=math.inf, shape=()),
+        #         "low": Box(low=0, high=math.inf, shape=()),
+        #         "close": Box(low=0, high=math.inf, shape=()),
+        #         "volume": Box(low=0, high=math.inf, shape=()),
+        #         "close_time": Discrete(1_000_000_000_000),
+        #         "quote_volume": Box(low=0, high=math.inf, shape=()),
+        #         "count": Discrete(1_000_000_000_000),
+        #         "taker_buy_volume": Box(low=0, high=math.inf, shape=()),
+        #         "taker_buy_quote_volume": Box(low=0, high=math.inf, shape=()),
+        #         "ignore": Discrete(1),
+        #     }
+        # )
+
+        # self.observation_space = Tuple(
+        #     (
+        #         Discrete(1_000_000_000_000),
+        #         Box(low=0, high=math.inf, shape=()),
+        #         Box(low=0, high=math.inf, shape=()),
+        #         Box(low=0, high=math.inf, shape=()),
+        #         Box(low=0, high=math.inf, shape=()),
+        #         Box(low=0, high=math.inf, shape=()),
+        #         Discrete(1_000_000_000_000),
+        #         Box(low=0, high=math.inf, shape=()),
+        #         Discrete(1_000_000_000_000),
+        #         Box(low=0, high=math.inf, shape=()),
+        #         Box(low=0, high=math.inf, shape=()),
+        #         Discrete(1),
+        #     )
+        # )
+
+        self.observation_space = Box(low=0, high=math.inf, shape=(12,))
 
         self._action_to_reward = {
             # Buy
@@ -70,10 +90,8 @@ class BTCUSDTEnv(gym.Env):
         self.window = None
         self.clock = None
 
-    def reset(
-        self, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[dict, dict]:
-        super().reset(seed=seed, options=options)
+    def reset(self, **kwargs) -> tuple[np.ndarray, dict]:
+        super().reset(**kwargs)
 
         self._actions = []
         self._start_timestep = self.np_random.integers(
@@ -110,13 +128,20 @@ class BTCUSDTEnv(gym.Env):
             pygame.display.quit()
             pygame.quit()
 
-    def _get_obs(self) -> dict:
-        return self._data_frame.iloc[self._current_timestep].to_dict()
+    def _get_current_in_dataframe(self) -> pd.Series:
+        return self._data_frame.iloc[self._current_timestep]
+
+    def _get_obs(self) -> np.ndarray:
+        return self._get_current_in_dataframe().values  # type: ignore
 
     def _get_info(self) -> dict:
         curr_pnl = self._current_pnl()
         curr_roi = self._get_roi(self._get_actions_idxs(0), curr_pnl)
-        return {"pnl": curr_pnl, "roi": curr_roi}
+        return {
+            "pnl": curr_pnl,
+            "roi": curr_roi,
+            "candle": self._get_current_in_dataframe().to_dict(),
+        }
 
     def _get_pnl(self, open_idxs: list[int], close_price: float) -> float:
         return reduce(
