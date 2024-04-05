@@ -107,7 +107,7 @@ class BTCUSDTEnv(gym.Env):
 
     def step(
         self, action: int
-    ) -> tuple[Any, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[np.ndarray, SupportsFloat, bool, bool, dict[str, Any]]:
         self._actions.append(action)
         rewarder, terminated = self._action_to_reward[action]
 
