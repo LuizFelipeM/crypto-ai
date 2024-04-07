@@ -1,11 +1,14 @@
 import math
 import gymnasium as gym
 import pandas as pd
+import polars as pl
 import numpy as np
 import pygame
 from functools import reduce
-from typing import Any, SupportsFloat
-from gymnasium.spaces import Discrete, Box, Tuple
+from typing import Any, List, Literal, Optional, SupportsFloat, Union, Tuple, overload
+from gymnasium.utils import seeding
+from gymnasium.spaces import Discrete, Box
+from numpy.typing import NDArray
 from gymnasium.core import RenderFrame
 from utils import diminishing_return, pnl, Position, Contract
 
@@ -15,8 +18,8 @@ class BTCUSDTEnv(gym.Env):
     # window: pygame.surface.Surface | None
     # clock: pygame.time.Clock | None
 
-    _data_frame: pd.DataFrame
-    _actions: list[int] = []
+    _data_frame: pl.LazyFrame
+    _actions: List[int] = []
     _start_timestep = 0
     _max_timestep = 2676455
 
@@ -27,7 +30,7 @@ class BTCUSDTEnv(gym.Env):
     def __init__(self, render_mode: str | None = None, timeframe=600) -> None:
         self.timeframe = timeframe
         self.window_size = 512
-        self._data_frame = pd.read_csv(
+        self._data_frame = pl.scan_csv(
             "./datasets/BTCUSDT - 1s - 2023-01 - 2023-12/BTCUSDT-1s-2023-01.csv"
         )
 
@@ -90,8 +93,13 @@ class BTCUSDTEnv(gym.Env):
         self.window = None
         self.clock = None
 
-    def reset(self, **kwargs) -> tuple[np.ndarray, dict]:
-        super().reset(**kwargs)
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> Tuple[NDArray[Any], dict]:
+        super().reset(seed=seed, options=options)
 
         self._actions = []
         self._start_timestep = self.np_random.integers(
@@ -107,7 +115,7 @@ class BTCUSDTEnv(gym.Env):
 
     def step(
         self, action: int
-    ) -> tuple[np.ndarray, SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> Tuple[Any, NDArray[Any], NDArray[Any], NDArray[Any], dict]:
         self._actions.append(action)
         rewarder, terminated = self._action_to_reward[action]
 
@@ -118,7 +126,7 @@ class BTCUSDTEnv(gym.Env):
         if self.render_mode == "human":
             self._render_frame()
 
-        return observation, reward, terminated, False, info
+        return observation, reward, terminated, np.array([True]), info
 
     # def render(self) -> RenderFrame | list[RenderFrame] | None:
     #     return self._render_frame()
@@ -128,11 +136,17 @@ class BTCUSDTEnv(gym.Env):
             pygame.display.quit()
             pygame.quit()
 
-    def _get_current_in_dataframe(self) -> pd.Series:
-        return self._data_frame.iloc[self._current_timestep]
+    def _get_current_as_data_frame(self) -> pl.DataFrame:
+        return self._data_frame.slice(self._current_timestep, 1).collect()
+
+    def _get_current_as_tuple(self) -> tuple[Any, ...]:
+        return self._get_current_as_data_frame().row()
+
+    def _get_current_as_dict(self) -> dict[str, Any]:
+        return self._get_current_as_data_frame().to_dict()
 
     def _get_obs(self) -> np.ndarray:
-        return self._get_current_in_dataframe().values  # type: ignore
+        return self._get_current_as_data_frame().to_numpy()
 
     def _get_info(self) -> dict:
         curr_pnl = self._current_pnl()
@@ -140,16 +154,16 @@ class BTCUSDTEnv(gym.Env):
         return {
             "pnl": curr_pnl,
             "roi": curr_roi,
-            "candle": self._get_current_in_dataframe().to_dict(),
+            "candle": self._get_current_as_dict(),
         }
 
-    def _get_pnl(self, open_idxs: list[int], close_price: float) -> float:
+    def _get_pnl(self, open_idxs: List[int], close_price: float) -> float:
         return reduce(
             lambda prev, idx: prev
             + pnl(
                 Position.LONG,
                 Contract.LINEAR,
-                self._data_frame.iloc[idx].open,
+                self._data_frame.slice(idx, 1).collect().item(0, "open"),
                 close_price,
                 position_qty=0.01,
             ),
@@ -157,21 +171,26 @@ class BTCUSDTEnv(gym.Env):
             0.0,
         )
 
-    def _get_roi(self, open_idxs: list[int], pnl: float) -> float:
+    def _get_roi(self, open_idxs: List[int], pnl: float) -> float:
         if not any(open_idxs):
             return 0
 
         return pnl / reduce(
-            lambda prev, idx: prev + self._data_frame.iloc[idx].open, open_idxs, 0.0
+            lambda prev, idx: prev
+            + self._data_frame.slice(idx, 1).collect().item(0, "open"),
+            open_idxs,
+            0.0,
         )
 
-    def _get_actions_idxs(self, action: int) -> list[int]:
+    def _get_actions_idxs(self, action: int) -> List[int]:
         return [i + 1 for i, a in enumerate(self._actions) if a == action]
 
     def _current_pnl(self) -> float:
         return self._get_pnl(
             self._get_actions_idxs(0),
-            self._data_frame.iloc[self._current_timestep].close,
+            self._data_frame.slice(self._current_timestep, 1)
+            .collect()
+            .item(0, "close"),
         )
 
     def _buy(self) -> float:
@@ -180,7 +199,7 @@ class BTCUSDTEnv(gym.Env):
             0.5,  # Improve with better calculation
         )
 
-    def _render_frame(self) -> RenderFrame | list[RenderFrame] | None:
+    def _render_frame(self) -> RenderFrame | List[RenderFrame] | None:
         pass
 
     # Fix when implementing the human render_mode

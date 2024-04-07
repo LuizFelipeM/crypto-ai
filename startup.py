@@ -29,11 +29,15 @@ accelarator = "gpu" if torch.cuda.is_available() else "cpu"
 num_gpus = torch.cuda.device_count()
 
 
-def create_env(env_name: str, num_envs: int) -> NormalizeReward:
-    env = gym.vector.make(env_name, num_envs=num_envs)
-    env = RecordEpisodeStatistics(env)
-    env = NormalizeObservation(env)
-    env = NormalizeReward(env)
+def create_env(env_name: str, num_envs: int) -> gym.vector.VectorEnv:
+    env = gym.vector.make(
+        env_name,
+        num_envs=num_envs,
+        wrappers=[RecordEpisodeStatistics, NormalizeObservation, NormalizeReward],
+    )
+    # env = RecordEpisodeStatistics(env)
+    # env = NormalizeObservation(env)
+    # env = NormalizeReward(env)
     return env
 
 
@@ -93,7 +97,7 @@ def test_env(env_name: str, policy: nn.Module, obs_rms: RunningMeanStd):
 class RLDataset(IterableDataset):
     def __init__(
         self,
-        env: NormalizeReward,
+        env: gym.vector.VectorEnv,
         policy: nn.Module,
         steps_per_epoch: int,
         gamma: float,
@@ -102,7 +106,7 @@ class RLDataset(IterableDataset):
         self.policy = policy
         self.steps_per_epoch = steps_per_epoch
         self.gamma = gamma
-        self.obs = env.reset()
+        self.obs = self.env.reset()
 
     @torch.no_grad()
     def __iter__(self):
@@ -174,11 +178,11 @@ class Reinforce(LightningModule):
         self.env = create_env(env_name, num_envs=num_envs)
 
         obs_size: int = (
-            self.env.unwrapped.single_observation_space.shape[0]
-            if hasattr(self.env.unwrapped.single_observation_space, "shape")
-            else len(self.env.unwrapped.single_observation_space)
+            self.env.get_wrapper_attr("single_observation_space").shape[0]
+            if hasattr(self.env.get_wrapper_attr("single_observation_space"), "shape")
+            else len(self.env.get_wrapper_attr("single_observation_space"))
         )
-        n_actions: int = self.env.unwrapped.single_action_space.n  # type: ignore
+        n_actions: int = self.env.get_wrapper_attr("single_action_space").n
 
         self.policy = GradientPolicy(obs_size, n_actions, hidden_size)
         self.dataset = RLDataset(self.env, self.policy, samples_per_epoch, gamma)
@@ -211,24 +215,25 @@ class Reinforce(LightningModule):
 
         return loss
 
-    def on_train_epoch_end(self, training_step_outputs):
-        self.log("episode/Return", self.env.return_queue[-1])
+    # Retornar dps
+    # def on_train_epoch_end(self, training_step_outputs):
+    #     self.log("episode/Return", self.env.return_queue[-1])
 
 
-# algo2 = Reinforce("CartPole-v1", num_workers=2)
-# trainer2 = Trainer(
-#     accelerator=accelarator, devices=num_gpus, max_epochs=100, log_every_n_steps=1
-# )
-# trainer2.fit(algo2)
-
-algo = Reinforce("crypto-envs/BTCUSDT-v0").to(device)
-trainer = Trainer(
+algo2 = Reinforce("CartPole-v1")
+trainer2 = Trainer(
     accelerator=accelarator, devices=num_gpus, max_epochs=100, log_every_n_steps=1
 )
-trainer.fit(algo)
+trainer2.fit(algo2)
+
+# algo = Reinforce("crypto-envs/BTCUSDT-v0", samples_per_epoch=100).to(device)
+# trainer = Trainer(
+#     accelerator=accelarator, devices=num_gpus, max_epochs=100, log_every_n_steps=1
+# )
+# trainer.fit(algo)
 
 import warnings
 
 warnings.filterwarnings("ignore")
 
-test_env("crypto-envs/BTCUSDT-v0", algo.policy.to(device), algo.env.obs_rms)
+# test_env("crypto-envs/BTCUSDT-v0", algo.policy.to(device), algo.env.obs_rms)
